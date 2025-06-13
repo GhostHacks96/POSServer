@@ -2,6 +2,8 @@ package me.ghosthacks96.pos.server.utils.controllers;
 
 import me.ghosthacks96.pos.server.POSServer;
 import me.ghosthacks96.pos.server.utils.models.UserModel;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.*;
 import java.net.Socket;
@@ -20,6 +22,7 @@ public class ClientHandler {
     private static final String RESPONSE_OK = "OK";
     private static final String RESPONSE_SUCCESS = "SUCCESS";
     private static final String RESPONSE_FAIL = "FAIL";
+    private static final Logger logger = LoggerFactory.getLogger(ClientHandler.class);
     public Thread clientThread;
     public Socket socket;
     UserModel user;
@@ -55,9 +58,10 @@ public class ClientHandler {
                 output.write(message);
                 output.newLine();
                 output.flush();
+                if (POSServer.config != null && POSServer.console.DEBUG) logger.debug("Sent to client {}: {}", ip, message);
                 return true;
             } catch (Exception e) {
-                System.err.println("Error sending message to client: " + e.getMessage());
+                logger.error("Error sending message to client {}: {}", ip, e.getMessage(), e);
             }
         }
         return false;
@@ -67,6 +71,7 @@ public class ClientHandler {
      * Safely parse a message and return the command and arguments
      */
     private MessageParts parseMessage(String message) {
+        if (POSServer.config != null && POSServer.console.DEBUG) logger.debug("Parsing message from client {}: {}", ip, message);
         if (message == null || message.trim().isEmpty()) {
             return new MessageParts("", new String[0]);
         }

@@ -8,5 +8,3 @@ db_host: localhost
 db_port: 3306
 db_username: pos
 db_password: pos123
-#logging configuration
-dir: "logs\\" #Directory for log files

@@ -5,6 +5,8 @@ import me.ghosthacks96.pos.server.utils.console.ConsoleHandler;
 import me.ghosthacks96.pos.server.utils.models.*;
 import me.ghosthacks96.pos.server.utils.perms.PermissionCategory;
 import me.ghosthacks96.pos.server.utils.perms.PermissionLevel;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.nio.charset.StandardCharsets;
 import java.sql.*;
@@ -91,6 +93,8 @@ public class DatabaseHandler {
         )
     """;
 
+    private static final Logger logger = LoggerFactory.getLogger(DatabaseHandler.class);
+
     public DatabaseHandler(String dbUrl, String dbUser, String dbPassword,int dbPort) {
         DB_PORT = dbPort;
         DB_URL = DB_URL+ dbUrl + ":" + DB_PORT + "/pos_db"; // Assuming pos_db is the database name
@@ -98,6 +102,7 @@ public class DatabaseHandler {
         DB_PASSWORD = dbPassword;
 
         ConsoleHandler.printInfo("Initializing database connection with URL: " + DB_URL + ", User: " + DB_USER + ", Port: " + DB_PORT);
+        if (POSServer.config != null && POSServer.console.DEBUG) logger.debug("Initializing database handler with URL: {}, User: {}, Port: {}", DB_URL, DB_USER, DB_PORT);
         initializeDatabase();
     }
 
@@ -111,19 +116,16 @@ public class DatabaseHandler {
 
             // Test connection
             try (Connection conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD)) {
-                System.out.println("Database connection established successfully");
-
+                if (POSServer.config != null && POSServer.console.DEBUG) logger.debug("Database connection established successfully");
                 // Create tables
                 createTables(conn);
-
                 // Insert default permissions if they don't exist
                 insertDefaultPermissions(conn);
-
                 // Create default admin user if it doesn't exist
                 createDefaultAdminUser(conn);
-
             }
         } catch (Exception e) {
+            logger.error("Failed to initialize database: {}", e.getMessage(), e);
             System.err.println("Failed to initialize database: " + e.getMessage());
             POSServer.shutdownSystem();
         }
@@ -157,6 +159,7 @@ public class DatabaseHandler {
             try {
                 conn.close();
                 connectionPool.remove(currentThread);
+                if (POSServer.config != null && POSServer.console.DEBUG) logger.debug("Closed database connection for thread {}", currentThread.getId());
             } catch (SQLException e) {
                 System.err.println("Error closing database connection: " + e.getMessage());
             }
@@ -172,7 +175,7 @@ public class DatabaseHandler {
             stmt.execute(CREATE_PERMISSIONS_TABLE);
             stmt.execute(CREATE_USER_PERMISSIONS_TABLE);
             stmt.execute(CREATE_TRANSACTIONS_TABLE);
-            System.out.println("Database tables created successfully");
+            if (POSServer.config != null && POSServer.console.DEBUG) logger.debug("Database tables created successfully");
         }
     }
 
@@ -198,7 +201,7 @@ public class DatabaseHandler {
             insertPermission(stmt, "PERMISSION_MANAGE", "Manage Permissions", "Assign and manage user permissions", "USER_MANAGEMENT", "ADMIN", "[\"USER_MANAGE\"]", true);
             insertPermission(stmt, "SYSTEM_SETTINGS", "System Settings", "Access and modify system settings", "SYSTEM", "ADMIN", "[]", true);
 
-            System.out.println("Default permissions inserted successfully");
+            if (POSServer.config != null && POSServer.console.DEBUG) logger.debug("Default permissions inserted successfully");
         }
     }
 
@@ -288,6 +291,9 @@ public class DatabaseHandler {
                         return user;
                     }
                 }
+            } catch (SQLException e) {
+                logger.error("Error authenticating user: {}", e.getMessage(), e);
+                e.printStackTrace();
             }
         } catch (SQLException e) {
             System.err.println("Error authenticating user: " + e.getMessage());
@@ -557,3 +563,4 @@ public class DatabaseHandler {
         System.out.println("Database handler shutdown complete");
     }
 }
+

@@ -1,6 +1,8 @@
 package me.ghosthacks96.pos.server.utils.console;
 
 import me.ghosthacks96.pos.server.POSServer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Scanner;
 
@@ -8,6 +10,7 @@ import static me.ghosthacks96.pos.server.POSServer.shutdownSystem;
 import static me.ghosthacks96.pos.server.POSServer.startServerThread;
 
 public class ConsoleHandler {
+    private static final Logger logger = LoggerFactory.getLogger(ConsoleHandler.class);
     private static final Scanner scanner = new Scanner(System.in);
     private static final String PROMPT = ConsoleColors.GREEN_BOLD + "Server> " + ConsoleColors.RESET;
     public static boolean DEBUG = false; // Default to false, can be set via config
@@ -43,6 +46,7 @@ public class ConsoleHandler {
 
     private static void handleCommand(String input) {
         input = input.toLowerCase().trim();
+        logger.info("Received command: {}", input);
         if(input.equals("quit")) input = "exit"; // Alias for exit command
         switch (input) {
             case "start":
@@ -78,15 +82,20 @@ public class ConsoleHandler {
     }
 
     public static void printInfo(String msg) {
+        logger.info(msg);
         printMessage("[INFO] ", ConsoleColors.BLUE_BOLD, msg);
     }
 
     public static void printWarning(String msg) {
+        logger.warn(msg);
         printMessage("[WARN] ", ConsoleColors.YELLOW_BOLD, msg);
     }
 
     public static void printDebug(String msg) {
-        if (DEBUG) printMessage("[DEBUG] ", ConsoleColors.CYAN_BOLD, msg);
+        if (DEBUG) {
+            logger.debug(msg);
+            printMessage("[DEBUG] ", ConsoleColors.CYAN_BOLD, msg);
+        }
     }
 
     public static void printError(String msg) {
@@ -109,3 +118,4 @@ public class ConsoleHandler {
         }
     }
 }
+
