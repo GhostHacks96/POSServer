@@ -1,9 +1,10 @@
 package me.ghosthacks96.pos.server.utils.controllers;
 
+import me.ghosthacks96.pos.server.POSServer;
 import me.ghosthacks96.pos.server.utils.models.UserModel;
 
-import java.io.BufferedReader;
-import java.io.BufferedWriter;
+import java.io.*;
+import java.net.Socket;
 import java.util.regex.Pattern;
 
 public class ClientHandler {
@@ -20,16 +21,20 @@ public class ClientHandler {
     private static final String RESPONSE_SUCCESS = "SUCCESS";
     private static final String RESPONSE_FAIL = "FAIL";
     public Thread clientThread;
+    public Socket socket;
     UserModel user;
     String ip;
     BufferedWriter output;
     BufferedReader input;
 
-    public ClientHandler(UserModel user, String ip, BufferedWriter output, BufferedReader input) {
-        this.user = user;
-        this.ip = ip;
-        this.output = output;
-        this.input = input;
+    public ClientHandler(Socket socket) throws Exception {
+        this.socket = socket;
+        this.ip = socket.getInetAddress().getHostAddress();
+        this.output = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream()));
+        this.input = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+
+        sendToClient("CMD"+DELIMITER+"LOGINREQUEST");
+        handleClient();
     }
 
     public String getUsername() {
@@ -112,8 +117,8 @@ public class ClientHandler {
         clientThread = new Thread(() -> {
             try {
                 String message;
-                while ((message = input.readLine()) != null) {
-                    System.out.println("Received from " + user.getUsername() + ": " + message);
+                while ((message = input.readLine()) != null && POSServer.running) {
+                    System.out.println("Received from " + ip + ": " + message);
 
                     MessageParts parsed = parseMessage(message);
                     String cmd = parsed.command;
@@ -138,12 +143,13 @@ public class ClientHandler {
                     }
                 }
             } catch (Exception e) {
-                System.err.println("Error handling client " + user.getUsername() + ": " + e.getMessage());
+                System.err.println("Error handling client " + ip + ": " + e.getMessage());
                 e.printStackTrace();
             } finally {
                 closeConnection();
             }
         });
+        clientThread.setDaemon(true);
         clientThread.start();
     }
 

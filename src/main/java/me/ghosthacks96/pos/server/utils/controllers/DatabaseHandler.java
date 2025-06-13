@@ -1,5 +1,7 @@
 package me.ghosthacks96.pos.server.utils.controllers;
 
+import me.ghosthacks96.pos.server.POSServer;
+import me.ghosthacks96.pos.server.utils.console.ConsoleHandler;
 import me.ghosthacks96.pos.server.utils.models.*;
 import me.ghosthacks96.pos.server.utils.perms.PermissionCategory;
 import me.ghosthacks96.pos.server.utils.perms.PermissionLevel;
@@ -18,6 +20,7 @@ public class DatabaseHandler {
     private static String DB_URL = "jdbc:mysql://";
     private static String DB_USER = "";
     private static String DB_PASSWORD = "pos_password";
+    private static int DB_PORT = 3306; // Default MySQL port
 
     // Connection pool (simple implementation)
     private final Map<Thread, Connection> connectionPool = new ConcurrentHashMap<>();
@@ -88,10 +91,13 @@ public class DatabaseHandler {
         )
     """;
 
-    public DatabaseHandler(String dbUrl, String dbUser, String dbPassword) {
-        DB_URL = dbUrl;
+    public DatabaseHandler(String dbUrl, String dbUser, String dbPassword,int dbPort) {
+        DB_PORT = dbPort;
+        DB_URL = DB_URL+ dbUrl + ":" + DB_PORT + "/pos_db"; // Assuming pos_db is the database name
         DB_USER = dbUser;
         DB_PASSWORD = dbPassword;
+
+        ConsoleHandler.printInfo("Initializing database connection with URL: " + DB_URL + ", User: " + DB_USER + ", Port: " + DB_PORT);
         initializeDatabase();
     }
 
@@ -119,8 +125,7 @@ public class DatabaseHandler {
             }
         } catch (Exception e) {
             System.err.println("Failed to initialize database: " + e.getMessage());
-            e.printStackTrace();
-            throw new RuntimeException("Database initialization failed", e);
+            POSServer.shutdownSystem();
         }
     }
 
