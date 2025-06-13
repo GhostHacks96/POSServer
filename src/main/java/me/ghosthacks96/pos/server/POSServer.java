@@ -6,6 +6,7 @@ import me.ghosthacks96.pos.server.utils.console.ConsoleHandler;
 import me.ghosthacks96.pos.server.utils.controllers.ClientHandler;
 import me.ghosthacks96.pos.server.utils.controllers.DatabaseHandler;
 import me.ghosthacks96.pos.server.utils.controllers.LogfileHandler;
+import me.ghosthacks96.pos.server.utils.controllers.WebInterfaceHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -33,6 +34,7 @@ public class POSServer {
     static int port = 666;
     static ArrayList<ClientHandler> clientSockets = new ArrayList<>();
     private static LogfileHandler logfileHandler = new LogfileHandler();
+    static WebInterfaceHandler webInterface;
 
     public static void main(String[] args) throws Exception{
 
@@ -115,6 +117,22 @@ public class POSServer {
         databaseHandler = new DatabaseHandler(config.getConfig().get("db_file") != null ? (String) config.getConfig().get("db_file") : "pos.db");
 
 
+        if(console.DEBUG) logger.debug("Starting Web Interface");
+        webInterface = new WebInterfaceHandler(6666);
+
+        // Add shutdown hook to gracefully stop the server
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            console.printInfo("Shutting down web interface...");
+            webInterface.stop();
+        }));
+
+        try {
+            webInterface.start();
+            webInterface.join(); // Keep the server running
+        } catch (Exception e) {
+            System.err.println("Failed to start web interface: " + e.getMessage());
+            e.printStackTrace();
+        }
 
     }
 

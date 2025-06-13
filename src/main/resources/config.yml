@@ -5,5 +5,5 @@ auto-start: true #Automatically start the client processing on server startup
 debug: true #Enable or disable debug mode
 #database configuration
 db_file: pos.db
-db_r-host:
+db-r-host:
 db_getremote: false

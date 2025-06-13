@@ -1,5 +1,6 @@
 package me.ghosthacks96.pos.server.utils.controllers;
 
+import me.ghosthacks96.pos.server.POSServer;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.server.ServerConnector;
 import org.eclipse.jetty.servlet.ServletContextHandler;
@@ -22,7 +23,7 @@ public class WebInterfaceHandler {
     private boolean isRunning = false;
 
     public WebInterfaceHandler() {
-        this(8080); // Default port
+        this(6666); // Default port
     }
 
     public WebInterfaceHandler(int port) {
@@ -33,6 +34,9 @@ public class WebInterfaceHandler {
      * Starts the Jetty web server
      */
     public void start() {
+        logger.info("Starting Jetty web server on port {}...", port);
+        POSServer.console.printInfo("Starting Jetty web server on port " + port + "...");
+
         try {
             server = new Server();
 
@@ -66,6 +70,9 @@ public class WebInterfaceHandler {
      * Stops the Jetty web server
      */
     public void stop() {
+        logger.info("Stopping Jetty web server...");
+        POSServer.console.printInfo("Stopping Jetty web server...");
+
         if (server != null && isRunning) {
             try {
                 server.stop();
@@ -110,6 +117,7 @@ public class WebInterfaceHandler {
      * Check if the server is running
      */
     public boolean isRunning() {
+        logger.info("Web server running status: {}", isRunning);
         return isRunning && server != null && server.isRunning();
     }
 
@@ -140,6 +148,9 @@ public class WebInterfaceHandler {
         @Override
         protected void doGet(HttpServletRequest req, HttpServletResponse resp)
                 throws ServletException, IOException {
+            logger.info("DashboardServlet GET request from {}", req.getRemoteAddr());
+            POSServer.console.printInfo("DashboardServlet GET request from " + req.getRemoteAddr());
+
             resp.setContentType("text/html");
             resp.setStatus(HttpServletResponse.SC_OK);
 
@@ -285,22 +296,4 @@ public class WebInterfaceHandler {
         }
     }
 
-    // Example usage method
-    public static void main(String[] args) {
-        WebInterfaceHandler webInterface = new WebInterfaceHandler(8080);
-
-        // Add shutdown hook to gracefully stop the server
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            System.out.println("Shutting down web interface...");
-            webInterface.stop();
-        }));
-
-        try {
-            webInterface.start();
-            webInterface.join(); // Keep the server running
-        } catch (Exception e) {
-            System.err.println("Failed to start web interface: " + e.getMessage());
-            e.printStackTrace();
-        }
-    }
 }
