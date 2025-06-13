@@ -12,7 +12,7 @@ import java.util.Map;
 public class Config {
 
     Yaml config;
-    Map<String,Object> configMap;
+    static Map<String,Object> configMap;
     ConsoleHandler console;
 
     public Config() {
