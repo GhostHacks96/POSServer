@@ -45,7 +45,7 @@ public class Config {
         }
     }
 
-    public Map<String, Object> getConfig() {
+    public static Map<String, Object> getConfig() {
         return configMap;
     }
 

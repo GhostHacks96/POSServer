@@ -19,102 +19,87 @@ import java.util.Base64;
 
 public class DatabaseHandler {
 
-    // Database connection details
-    private static String DB_URL = "jdbc:mysql://";
-    private static String DB_USER = "";
-    private static String DB_PASSWORD = "pos_password";
-    private static int DB_PORT = 3306; // Default MySQL port
+    // SQLite database file path
+    private static String DB_URL = "jdbc:sqlite:";
 
     // Connection pool (simple implementation)
     private final Map<Thread, Connection> connectionPool = new ConcurrentHashMap<>();
     private final Object poolLock = new Object();
 
-    // SQL Queries
+    // SQL Queries (SQLite syntax)
     private static final String CREATE_USERS_TABLE = """
         CREATE TABLE IF NOT EXISTS users (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            username VARCHAR(50) UNIQUE NOT NULL,
-            password_hash VARCHAR(255) NOT NULL,
-            salt VARCHAR(255) NOT NULL,
-            is_admin BOOLEAN DEFAULT FALSE,
-            is_active BOOLEAN DEFAULT TRUE,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            last_login TIMESTAMP NULL,
-            INDEX idx_username (username),
-            INDEX idx_active (is_active)
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            salt TEXT NOT NULL,
+            is_admin INTEGER DEFAULT 0,
+            is_active INTEGER DEFAULT 1,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            last_login DATETIME
         )
     """;
 
     private static final String CREATE_PERMISSIONS_TABLE = """
         CREATE TABLE IF NOT EXISTS permissions (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            permission_id VARCHAR(50) UNIQUE NOT NULL,
-            name VARCHAR(100) NOT NULL,
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            permission_id TEXT UNIQUE NOT NULL,
+            name TEXT NOT NULL,
             description TEXT,
-            category VARCHAR(50) NOT NULL,
-            level VARCHAR(20) NOT NULL,
-            dependencies JSON,
-            is_active BOOLEAN DEFAULT TRUE,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            INDEX idx_permission_id (permission_id),
-            INDEX idx_category (category)
+            category TEXT NOT NULL,
+            level TEXT NOT NULL,
+            dependencies TEXT,
+            is_active INTEGER DEFAULT 1,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
     """;
 
     private static final String CREATE_USER_PERMISSIONS_TABLE = """
         CREATE TABLE IF NOT EXISTS user_permissions (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            user_id INT NOT NULL,
-            permission_id VARCHAR(50) NOT NULL,
-            granted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            permission_id TEXT NOT NULL,
+            granted_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
             FOREIGN KEY (permission_id) REFERENCES permissions(permission_id) ON DELETE CASCADE,
-            UNIQUE KEY unique_user_permission (user_id, permission_id)
+            UNIQUE (user_id, permission_id)
         )
     """;
 
     private static final String CREATE_TRANSACTIONS_TABLE = """
         CREATE TABLE IF NOT EXISTS transactions (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            transaction_id VARCHAR(50) UNIQUE NOT NULL,
-            customer_id VARCHAR(50),
-            employee_id VARCHAR(50) NOT NULL,
-            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            subtotal DECIMAL(10,2) NOT NULL,
-            tax_amount DECIMAL(10,2) DEFAULT 0.00,
-            discount_amount DECIMAL(10,2) DEFAULT 0.00,
-            total_amount DECIMAL(10,2) NOT NULL,
-            payment_method VARCHAR(20) NOT NULL,
-            status VARCHAR(20) NOT NULL,
-            INDEX idx_transaction_id (transaction_id),
-            INDEX idx_employee_id (employee_id),
-            INDEX idx_timestamp (timestamp),
-            INDEX idx_status (status)
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            transaction_id TEXT UNIQUE NOT NULL,
+            customer_id TEXT,
+            employee_id TEXT NOT NULL,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+            subtotal REAL NOT NULL,
+            tax_amount REAL DEFAULT 0.00,
+            discount_amount REAL DEFAULT 0.00,
+            total_amount REAL NOT NULL,
+            payment_method TEXT NOT NULL,
+            status TEXT NOT NULL
         )
     """;
     private static final String CREATE_PRODUCTS_TABLE = """
         CREATE TABLE IF NOT EXISTS products (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            name VARCHAR(100) NOT NULL,
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
             description TEXT,
-            price DECIMAL(10,2) NOT NULL,
-            stock INT DEFAULT 0,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+            price REAL NOT NULL,
+            stock INTEGER DEFAULT 0,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
     """;
 
     private static final Logger logger = LoggerFactory.getLogger(DatabaseHandler.class);
 
-    public DatabaseHandler(String dbUrl, String dbUser, String dbPassword,int dbPort) {
-        DB_PORT = dbPort;
-        DB_URL = DB_URL+ dbUrl + ":" + DB_PORT + "/pos_db"; // Assuming pos_db is the database name
-        DB_USER = dbUser;
-        DB_PASSWORD = dbPassword;
-
-        ConsoleHandler.printInfo("Initializing database connection with URL: " + DB_URL + ", User: " + DB_USER + ", Port: " + DB_PORT);
-        if (POSServer.config != null && POSServer.console.DEBUG) logger.debug("Initializing database handler with URL: {}, User: {}, Port: {}", DB_URL, DB_USER, DB_PORT);
+    public DatabaseHandler(String dbFile) {
+        DB_URL += dbFile;
+        ConsoleHandler.printInfo("Initializing SQLite database at: " + DB_URL);
+        if (POSServer.config != null && POSServer.console.DEBUG) logger.debug("Initializing SQLite database handler at {}", DB_URL);
         initializeDatabase();
     }
 
@@ -123,12 +108,11 @@ public class DatabaseHandler {
      */
     private void initializeDatabase() {
         try {
-            // Load MySQL JDBC driver
-            Class.forName("com.mysql.cj.jdbc.Driver");
-
+            // Load SQLite JDBC driver
+            Class.forName("org.sqlite.JDBC");
             // Test connection
-            try (Connection conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD)) {
-                if (POSServer.config != null && POSServer.console.DEBUG) logger.debug("Database connection established successfully");
+            try (Connection conn = DriverManager.getConnection(DB_URL)) {
+                if (POSServer.config != null && POSServer.console.DEBUG) logger.debug("SQLite connection established successfully");
                 // Create tables
                 createTables(conn);
                 // Insert default permissions if they don't exist
@@ -137,8 +121,8 @@ public class DatabaseHandler {
                 createDefaultAdminUser(conn);
             }
         } catch (Exception e) {
-            logger.error("Failed to initialize database: {}", e.getMessage(), e);
-            System.err.println("Failed to initialize database: " + e.getMessage());
+            logger.error("Failed to initialize SQLite database: {}", e.getMessage(), e);
+            System.err.println("Failed to initialize SQLite database: " + e.getMessage());
             POSServer.shutdownSystem();
         }
     }
@@ -149,16 +133,16 @@ public class DatabaseHandler {
     private Connection getConnection() throws SQLException {
         Thread currentThread = Thread.currentThread();
         Connection conn = connectionPool.get(currentThread);
-
         if (conn == null || conn.isClosed()) {
             synchronized (poolLock) {
-                conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD);
+                // Only create a new connection if none exists for the thread
+                conn = DriverManager.getConnection(DB_URL);
                 connectionPool.put(currentThread, conn);
             }
         }
-
         return conn;
     }
+
 
     /**
      * Close connection for current thread
@@ -166,14 +150,13 @@ public class DatabaseHandler {
     public void closeConnection() {
         Thread currentThread = Thread.currentThread();
         Connection conn = connectionPool.get(currentThread);
-
         if (conn != null) {
             try {
                 conn.close();
                 connectionPool.remove(currentThread);
-                if (POSServer.config != null && POSServer.console.DEBUG) logger.debug("Closed database connection for thread {}", currentThread.getId());
+                if (POSServer.config != null && POSServer.console.DEBUG) logger.debug("Closed SQLite connection for thread {}", currentThread.getId());
             } catch (SQLException e) {
-                System.err.println("Error closing database connection: " + e.getMessage());
+                System.err.println("Error closing SQLite connection: " + e.getMessage());
             }
         }
     }
@@ -188,7 +171,7 @@ public class DatabaseHandler {
             stmt.execute(CREATE_USER_PERMISSIONS_TABLE);
             stmt.execute(CREATE_TRANSACTIONS_TABLE);
             stmt.execute(CREATE_PRODUCTS_TABLE);
-            if (POSServer.config != null && POSServer.console.DEBUG) logger.debug("Database tables created successfully");
+            if (POSServer.config != null && POSServer.console.DEBUG) logger.debug("SQLite tables created successfully");
         }
     }
 
@@ -197,10 +180,9 @@ public class DatabaseHandler {
      */
     private void insertDefaultPermissions(Connection conn) throws SQLException {
         String insertPermissionSQL = """
-            INSERT IGNORE INTO permissions (permission_id, name, description, category, level, dependencies, is_active)
+            INSERT OR IGNORE INTO permissions (permission_id, name, description, category, level, dependencies, is_active)
             VALUES (?, ?, ?, ?, ?, ?, ?)
         """;
-
         try (PreparedStatement stmt = conn.prepareStatement(insertPermissionSQL)) {
             // You would get these from your PosPermissions class
             insertPermission(stmt, "SALES_PROCESS", "Process Sale", "Process customer transactions and sales", "SALES", "WRITE", "[]", true);
@@ -213,7 +195,6 @@ public class DatabaseHandler {
             insertPermission(stmt, "USER_MANAGE", "Manage Users", "Create, edit, and manage user accounts", "USER_MANAGEMENT", "WRITE", "[]", true);
             insertPermission(stmt, "PERMISSION_MANAGE", "Manage Permissions", "Assign and manage user permissions", "USER_MANAGEMENT", "ADMIN", "[\"USER_MANAGE\"]", true);
             insertPermission(stmt, "SYSTEM_SETTINGS", "System Settings", "Access and modify system settings", "SYSTEM", "ADMIN", "[]", true);
-
             if (POSServer.config != null && POSServer.console.DEBUG) logger.debug("Default permissions inserted successfully");
         }
     }
@@ -226,7 +207,7 @@ public class DatabaseHandler {
         stmt.setString(4, category);
         stmt.setString(5, level);
         stmt.setString(6, dependencies);
-        stmt.setBoolean(7, isActive);
+        stmt.setInt(7, isActive ? 1 : 0);
         stmt.addBatch();
         stmt.executeBatch();
         stmt.clearBatch();
@@ -237,26 +218,21 @@ public class DatabaseHandler {
      */
     private void createDefaultAdminUser(Connection conn) throws SQLException {
         String checkAdminSQL = "SELECT COUNT(*) FROM users WHERE username = 'admin'";
-
         try (Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery(checkAdminSQL)) {
-
             if (rs.next() && rs.getInt(1) == 0) {
                 // Create default admin user
                 String salt = generateSalt();
                 String hashedPassword = hashPassword("admin123", salt);
-
                 String insertAdminSQL = """
                     INSERT INTO users (username, password_hash, salt, is_admin, is_active)
-                    VALUES (?, ?, ?, TRUE, TRUE)
+                    VALUES (?, ?, ?, 1, 1)
                 """;
-
                 try (PreparedStatement insertStmt = conn.prepareStatement(insertAdminSQL)) {
                     insertStmt.setString(1, "admin");
                     insertStmt.setString(2, hashedPassword);
                     insertStmt.setString(3, salt);
                     insertStmt.executeUpdate();
-
                     System.out.println("Default admin user created (username: admin, password: admin123)");
                 }
             }
@@ -270,33 +246,31 @@ public class DatabaseHandler {
         if (username == null || username.trim().isEmpty() || password == null || password.trim().isEmpty()) {
             return null;
         }
-
         String sql = """
             SELECT id, username, password_hash, salt, is_admin, is_active, created_at, last_login
             FROM users 
             WHERE username = ? 
         """;
-
         try (Connection conn = getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
-
             stmt.setString(1, username.trim());
-
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) {
                     String storedHash = rs.getString("password_hash");
                     String salt = rs.getString("salt");
                     int id = rs.getInt("id");
-
-                    // Verify password
+                    boolean isAdmin = rs.getInt("is_admin") == 1;
+                    boolean isActive = rs.getInt("is_active") == 1;
                     if (verifyPassword(password, storedHash, salt)) {
-                        // Update last login
+                        try (PreparedStatement updateStmt = conn.prepareStatement(
+                                "UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?")) {
+                            updateStmt.setInt(1, id);
+                            updateStmt.executeUpdate();
+                        }
                         // Create user model
-                        boolean isAdmin = rs.getBoolean("is_admin");
-                        boolean isActive = rs.getBoolean("is_active");
                         LocalDateTime last_login = rs.getTimestamp("last_login") != null ?
                                 rs.getTimestamp("last_login").toLocalDateTime() : null;
-                        Set<PermissionModel> permissions = getUserPermissions(id);
+                        Set<PermissionModel> permissions = getUserPermissions(conn, id);
 
                         UserModel user = new UserModel(username, "", isAdmin, permissions);
                         user.setActive(isActive);
@@ -322,40 +296,32 @@ public class DatabaseHandler {
     /**
      * Get user permissions from database
      */
-    private Set<PermissionModel> getUserPermissions(int userId) {
+    private Set<PermissionModel> getUserPermissions(Connection conn, int userId) {
         Set<PermissionModel> permissions = new HashSet<>();
-
         String sql = """
-            SELECT p.permission_id, p.name, p.description, p.category, p.level, 
-                   p.dependencies, p.is_active, p.created_at, p.updated_at
-            FROM permissions p
-            JOIN user_permissions up ON p.permission_id = up.permission_id
-            WHERE up.user_id = ? AND p.is_active = TRUE
-        """;
-
-        try (Connection conn = getConnection();
+        SELECT p.permission_id, p.name, p.description, p.category, p.level, 
+               p.dependencies, p.is_active, p.created_at, p.updated_at
+        FROM permissions p
+        JOIN user_permissions up ON p.permission_id = up.permission_id
+        WHERE up.user_id = ? AND p.is_active = 1
+    """;
+        try ( // New connection per call
              PreparedStatement stmt = conn.prepareStatement(sql)) {
-
             stmt.setInt(1, userId);
-
             try (ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
-                    // Parse dependencies JSON (simplified - you might want to use a proper JSON library)
-                    String dependenciesJson = rs.getString("dependencies");
-                    Set<String> dependencies = parseDependencies(dependenciesJson);
-
+                    Set<String> deps = parseDependencies(rs.getString("dependencies"));
                     PermissionModel permission = new PermissionModel(
                             rs.getString("permission_id"),
                             rs.getString("name"),
                             rs.getString("description"),
                             PermissionCategory.valueOf(rs.getString("category")),
                             PermissionLevel.valueOf(rs.getString("level")),
-                            dependencies,
-                            rs.getBoolean("is_active"),
+                            deps,
+                            rs.getInt("is_active") == 1,
                             rs.getTimestamp("created_at").toLocalDateTime(),
                             rs.getTimestamp("updated_at").toLocalDateTime()
                     );
-
                     permissions.add(permission);
                 }
             }
@@ -363,9 +329,9 @@ public class DatabaseHandler {
             System.err.println("Error getting user permissions: " + e.getMessage());
             e.printStackTrace();
         }
-
         return permissions;
     }
+
 
     /**
      * Parse dependencies JSON string (simple implementation)
@@ -373,7 +339,6 @@ public class DatabaseHandler {
     private Set<String> parseDependencies(String dependenciesJson) {
         Set<String> dependencies = new HashSet<>();
         if (dependenciesJson != null && !dependenciesJson.equals("[]")) {
-            // Simple JSON parsing - replace with proper JSON library in production
             dependenciesJson = dependenciesJson.replace("[", "").replace("]", "").replace("\"", "");
             if (!dependenciesJson.trim().isEmpty()) {
                 String[] deps = dependenciesJson.split(",");
@@ -385,7 +350,6 @@ public class DatabaseHandler {
         return dependencies;
     }
 
-
     /**
      * Create a new user
      */
@@ -393,33 +357,26 @@ public class DatabaseHandler {
         if (username == null || username.trim().isEmpty() || password == null || password.trim().isEmpty()) {
             return false;
         }
-
         try (Connection conn = getConnection()) {
             conn.setAutoCommit(false);
-
             try {
-                // Insert user
                 String salt = generateSalt();
                 String hashedPassword = hashPassword(password, salt);
-
                 String insertUserSQL = """
                     INSERT INTO users (username, password_hash, salt, is_admin, is_active)
-                    VALUES (?, ?, ?, ?, TRUE)
+                    VALUES (?, ?, ?, ?, 1)
                 """;
-
                 int userId;
                 try (PreparedStatement stmt = conn.prepareStatement(insertUserSQL, Statement.RETURN_GENERATED_KEYS)) {
                     stmt.setString(1, username.trim());
                     stmt.setString(2, hashedPassword);
                     stmt.setString(3, salt);
-                    stmt.setBoolean(4, isAdmin);
-
+                    stmt.setInt(4, isAdmin ? 1 : 0);
                     int affected = stmt.executeUpdate();
                     if (affected == 0) {
                         conn.rollback();
                         return false;
                     }
-
                     try (ResultSet generatedKeys = stmt.getGeneratedKeys()) {
                         if (generatedKeys.next()) {
                             userId = generatedKeys.getInt(1);
@@ -429,11 +386,8 @@ public class DatabaseHandler {
                         }
                     }
                 }
-
-                // Insert user permissions
                 if (permissionIds != null && !permissionIds.isEmpty()) {
                     String insertPermissionSQL = "INSERT INTO user_permissions (user_id, permission_id) VALUES (?, ?)";
-
                     try (PreparedStatement stmt = conn.prepareStatement(insertPermissionSQL)) {
                         for (String permissionId : permissionIds) {
                             stmt.setInt(1, userId);
@@ -443,17 +397,14 @@ public class DatabaseHandler {
                         stmt.executeBatch();
                     }
                 }
-
                 conn.commit();
                 return true;
-
             } catch (SQLException e) {
                 conn.rollback();
                 throw e;
             } finally {
                 conn.setAutoCommit(true);
             }
-
         } catch (SQLException e) {
             System.err.println("Error creating user: " + e.getMessage());
             e.printStackTrace();
@@ -540,7 +491,7 @@ public class DatabaseHandler {
                 LocalDateTime timestamp = rs.getTimestamp("created_at") != null ?
                         rs.getTimestamp("created_at").toLocalDateTime() : null;
 
-                Set<PermissionModel> permissions = getUserPermissions(rs.getInt("id"));
+                Set<PermissionModel> permissions = getUserPermissions(conn,rs.getInt("id"));
 
                 UserModel user = new UserModel(username, "", isAdmin, permissions);
                 user.setActive(isActive);
@@ -562,7 +513,7 @@ public class DatabaseHandler {
     public List<Map<String, Object>> getAllProducts() {
         List<Map<String, Object>> products = new ArrayList<>();
         String sql = "SELECT id, name, description, price, stock FROM products";
-        try (Connection conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD);
+        try (Connection conn = getConnection();
              PreparedStatement ps = conn.prepareStatement(sql);
              ResultSet rs = ps.executeQuery()) {
             while (rs.next()) {

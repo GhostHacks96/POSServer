@@ -4,7 +4,6 @@ port: 666
 auto-start: true #Automatically start the client processing on server startup
 debug: true #Enable or disable debug mode
 #database configuration
-db_host: localhost
-db_port: 3306
-db_username: pos
-db_password: pos123
+db_file: pos.db
+db_r-host:
+db_getremote: false

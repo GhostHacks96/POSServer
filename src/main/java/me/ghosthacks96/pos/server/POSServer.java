@@ -1,6 +1,7 @@
 package me.ghosthacks96.pos.server;
 
 import me.ghosthacks96.pos.server.utils.Config;
+import me.ghosthacks96.pos.server.utils.RemoteFile;
 import me.ghosthacks96.pos.server.utils.console.ConsoleHandler;
 import me.ghosthacks96.pos.server.utils.controllers.ClientHandler;
 import me.ghosthacks96.pos.server.utils.controllers.DatabaseHandler;
@@ -104,18 +105,15 @@ public class POSServer {
 
         console.DEBUG = config.getConfig().get("debug") != null && (boolean) config.getConfig().get("debug");
 
-        String dburl = config.getConfig().get("db_host") != null ? (String) config.getConfig().get("db_host") : "NULL";
-        String dbuser = config.getConfig().get("db_username") != null ? (String) config.getConfig().get("db_username") : "NULL";
-        String dbpassword = config.getConfig().get("db_password") != null ? (String) config.getConfig().get("db_password") : "NULL";
-        int dbport = config.getConfig().get("db_port") != null ? (Integer) config.getConfig().get("db_port") : 3306;
-        if(dburl == null || dburl.equals("NULL") || dbuser == null || dbuser.equals("NULL") || dbpassword == null || dbpassword.equals("NULL")) {
-            console.printError("Database configuration: URL:"+ dburl + ", User:" + dbuser + ", Password:" + dbpassword + ", Port:" + dbport);
-            console.printError("Database configuration is missing or invalid. Please check your config.yml file.");
-            System.exit(1);
+        if(config.getConfig().get("db_getremote") != null && (boolean) config.getConfig().get("db_getremote")) {
+            console.printInfo("Remote database access enabled, please ensure the database file is accessible.");
+            new RemoteFile(config.getConfig().get("db-r-host")+"").download();
         } else {
-            console.printInfo("Database configuration loaded successfully.");
+            console.printInfo("Remote database access disabled, using local database.");
         }
-        databaseHandler = new DatabaseHandler(dburl,dbuser,dbpassword,dbport);
+
+        databaseHandler = new DatabaseHandler(config.getConfig().get("db_file") != null ? (String) config.getConfig().get("db_file") : "pos.db");
+
 
 
     }
