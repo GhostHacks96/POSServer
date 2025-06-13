@@ -118,7 +118,7 @@ public class POSServer {
 
 
         if(console.DEBUG) logger.debug("Starting Web Interface");
-        webInterface = new WebInterfaceHandler(6666);
+        webInterface = new WebInterfaceHandler(8080);
 
         // Add shutdown hook to gracefully stop the server
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {

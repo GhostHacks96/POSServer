@@ -1,6 +1,7 @@
 package me.ghosthacks96.pos.server.utils.controllers;
 
 import me.ghosthacks96.pos.server.POSServer;
+import me.ghosthacks96.pos.server.utils.console.ConsoleHandler;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.server.ServerConnector;
 import org.eclipse.jetty.servlet.ServletContextHandler;
@@ -14,6 +15,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.net.InetAddress;
 
 public class WebInterfaceHandler {
     private static final Logger logger = LoggerFactory.getLogger(WebInterfaceHandler.class);
@@ -40,9 +42,11 @@ public class WebInterfaceHandler {
         try {
             server = new Server();
 
-            // Configure the server connector
+            // Configure the server connector with explicit host binding
             ServerConnector connector = new ServerConnector(server);
             connector.setPort(port);
+            connector.setHost("0.0.0.0"); // Bind to all interfaces
+            connector.setIdleTimeout(30000); // 30 second timeout
             server.addConnector(connector);
 
             // Create servlet context handler
@@ -57,11 +61,34 @@ public class WebInterfaceHandler {
             server.start();
             isRunning = true;
 
-            logger.info("POS Web Interface started on port: {}", port);
-            logger.info("Access the web interface at: http://localhost:{}", port);
+            // Get the actual bound port (useful if port was 0)
+            int actualPort = connector.getLocalPort();
+
+            ConsoleHandler.printInfo("POS Web Interface started successfully!");
+            ConsoleHandler.printInfo("Server bound to:"+ connector.getHost()+":"+ actualPort);
+            ConsoleHandler.printInfo("Access the web interface at:");
+            ConsoleHandler.printInfo("  - http://localhost:"+ actualPort);
+            ConsoleHandler.printInfo("  - http://127.0.0.1:"+ actualPort);
+
+            try {
+                String localIP = InetAddress.getLocalHost().getHostAddress();
+                logger.info("  - http://{}:{}", localIP, actualPort);
+            } catch (Exception e) {
+                logger.debug("Could not determine local IP: {}", e.getMessage());
+            }
+
+            POSServer.console.printInfo("Web interface accessible at http://localhost:" + actualPort);
 
         } catch (Exception e) {
-            logger.error("Failed to start web interface", e);
+            logger.error("Failed to start web interface on port {}", port, e);
+
+            // Check if port is already in use
+            if (e.getMessage().contains("Address already in use") ||
+                    e.getMessage().contains("bind")) {
+                logger.error("Port {} appears to be already in use. Try a different port.", port);
+                POSServer.console.printError("Port " + port + " is already in use!");
+            }
+
             throw new RuntimeException("Failed to start web interface", e);
         }
     }
@@ -76,6 +103,7 @@ public class WebInterfaceHandler {
         if (server != null && isRunning) {
             try {
                 server.stop();
+                server.destroy();
                 isRunning = false;
                 logger.info("POS Web Interface stopped");
             } catch (Exception e) {
@@ -111,20 +139,28 @@ public class WebInterfaceHandler {
 
         // Static resources (CSS, JS, images)
         context.addServlet(new ServletHolder(new StaticResourceServlet()), "/static/*");
+
+        // Health check endpoint
+        context.addServlet(new ServletHolder(new HealthCheckServlet()), "/health");
     }
 
     /**
      * Check if the server is running
      */
     public boolean isRunning() {
-        logger.info("Web server running status: {}", isRunning);
-        return isRunning && server != null && server.isRunning();
+        boolean running = isRunning && server != null && server.isRunning();
+        logger.debug("Web server running status: {}", running);
+        return running;
     }
 
     /**
      * Get the current port
      */
     public int getPort() {
+        if (server != null && server.isStarted()) {
+            ServerConnector connector = (ServerConnector) server.getConnectors()[0];
+            return connector.getLocalPort();
+        }
         return port;
     }
 
@@ -140,6 +176,27 @@ public class WebInterfaceHandler {
     }
 
     // Inner servlet classes
+
+    /**
+     * Health check servlet for testing connectivity
+     */
+    private static class HealthCheckServlet extends HttpServlet {
+        @Override
+        protected void doGet(HttpServletRequest req, HttpServletResponse resp)
+                throws ServletException, IOException {
+            resp.setContentType("application/json");
+            resp.setStatus(HttpServletResponse.SC_OK);
+
+            PrintWriter out = resp.getWriter();
+            out.println("""
+                {
+                    "status": "healthy",
+                    "timestamp": "%s",
+                    "server": "POS Web Interface"
+                }
+                """.formatted(java.time.Instant.now()));
+        }
+    }
 
     /**
      * Main dashboard servlet
@@ -177,11 +234,12 @@ public class WebInterfaceHandler {
                         .stat-card { background: #3498db; color: white; padding: 1.5rem; border-radius: 8px; text-align: center; }
                         .stat-number { font-size: 2rem; font-weight: bold; }
                         .stat-label { font-size: 0.9rem; opacity: 0.9; }
-                        .button { background: #3498db; color: white; padding: 0.75rem 1.5rem; border: none; border-radius: 4px; cursor: pointer; text-decoration: none; display: inline-block; }
+                        .button { background: #3498db; color: white; padding: 0.75rem 1.5rem; border: none; border-radius: 4px; cursor: pointer; text-decoration: none; display: inline-block; margin: 0.25rem; }
                         .button:hover { background: #2980b9; }
                         .status { padding: 0.5rem 1rem; border-radius: 4px; font-weight: bold; }
                         .status.online { background: #2ecc71; color: white; }
                         .status.offline { background: #e74c3c; color: white; }
+                        .connection-info { background: #ecf0f1; padding: 1rem; border-radius: 4px; margin-top: 1rem; }
                     </style>
                 </head>
                 <body>
@@ -196,11 +254,21 @@ public class WebInterfaceHandler {
                             <p>Server Status: <span class="status online">Online</span></p>
                             <p>Database Connection: <span class="status online">Connected</span></p>
                             <p>Last Updated: <span id="timestamp"></span></p>
+                            
+                            <div class="connection-info">
+                                <h3>Connection Test</h3>
+                                <p>If you can see this page, the web interface is working correctly!</p>
+                                <p>Server Time: <span id="server-time"></span></p>
+                            </div>
                         </div>
                         
                         <div class="card">
                             <h2>Quick Stats</h2>
                             <div class="stats-grid">
+                                <div class="stat-card">
+                                    <div class="stat-number" id="connected-clients">0</div>
+                                    <div class="stat-label">Connected Clients</div>
+                                </div>
                                 <div class="stat-card">
                                     <div class="stat-number">0</div>
                                     <div class="stat-label">Today's Sales</div>
@@ -213,16 +281,13 @@ public class WebInterfaceHandler {
                                     <div class="stat-number">0</div>
                                     <div class="stat-label">Total Products</div>
                                 </div>
-                                <div class="stat-card">
-                                    <div class="stat-number">0</div>
-                                    <div class="stat-label">Connected Clients</div>
-                                </div>
                             </div>
                         </div>
                         
                         <div class="card">
                             <h2>Quick Actions</h2>
                             <a href="/api/status" class="button">View API Status</a>
+                            <a href="/health" class="button">Health Check</a>
                             <a href="/api/products" class="button">Manage Products</a>
                             <a href="/api/transactions" class="button">View Transactions</a>
                             <a href="/api/reports" class="button">Generate Reports</a>
@@ -230,13 +295,23 @@ public class WebInterfaceHandler {
                     </div>
                     
                     <script>
-                        // Update timestamp
-                        document.getElementById('timestamp').textContent = new Date().toLocaleString();
+                        function updateTimestamp() {
+                            const now = new Date();
+                            document.getElementById('timestamp').textContent = now.toLocaleString();
+                            document.getElementById('server-time').textContent = now.toLocaleString();
+                        }
                         
-                        // Auto-refresh every 30 seconds
-                        setInterval(() => {
-                            document.getElementById('timestamp').textContent = new Date().toLocaleString();
-                        }, 30000);
+                        // Update timestamp immediately and every 30 seconds
+                        updateTimestamp();
+                        setInterval(updateTimestamp, 30000);
+                        
+                        // Simple connected clients counter (placeholder)
+                        // In a real implementation, this would fetch from your server
+                        setTimeout(() => {
+                            // This is just a placeholder - you'd want to fetch real data
+                            const clientCount = Math.floor(Math.random() * 5);
+                            document.getElementById('connected-clients').textContent = clientCount;
+                        }, 1000);
                     </script>
                 </body>
                 </html>
@@ -252,6 +327,8 @@ public class WebInterfaceHandler {
         protected void doGet(HttpServletRequest req, HttpServletResponse resp)
                 throws ServletException, IOException {
             String pathInfo = req.getPathInfo();
+            logger.info("API request: {} from {}", pathInfo, req.getRemoteAddr());
+
             resp.setContentType("application/json");
             resp.setStatus(HttpServletResponse.SC_OK);
 
@@ -263,11 +340,13 @@ public class WebInterfaceHandler {
                         "status": "online",
                         "timestamp": "%s",
                         "version": "1.0-SNAPSHOT",
+                        "server": "POS Web Interface",
                         "endpoints": [
                             "/api/status",
                             "/api/products",
                             "/api/transactions",
-                            "/api/reports"
+                            "/api/reports",
+                            "/health"
                         ]
                     }
                     """.formatted(java.time.Instant.now()));
@@ -276,9 +355,10 @@ public class WebInterfaceHandler {
                     {
                         "error": "Endpoint not implemented yet",
                         "path": "%s",
-                        "message": "This API endpoint is under development"
+                        "message": "This API endpoint is under development",
+                        "timestamp": "%s"
                     }
-                    """.formatted(pathInfo));
+                    """.formatted(pathInfo, java.time.Instant.now()));
             }
         }
     }
@@ -295,5 +375,4 @@ public class WebInterfaceHandler {
             resp.getWriter().println("Static resource not found: " + req.getPathInfo());
         }
     }
-
 }
