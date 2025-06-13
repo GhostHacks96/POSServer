@@ -9,6 +9,8 @@ import java.io.*;
 import java.net.Socket;
 import java.util.regex.Pattern;
 
+import static me.ghosthacks96.pos.server.POSServer.console;
+
 public class ClientHandler {
 
     // Define the delimiter and create a compiled pattern for better performance
@@ -18,6 +20,12 @@ public class ClientHandler {
     private static final String CMD_TEST = "TEST";
     private static final String CMD_LOGIN = "LOGIN";
     private static final String CMD_LOGOUT = "LOGOUT";
+    private static final String CMD_DISCONNECT = "DISCONNECT";
+    private static final String CMD = "CMD";
+    private static final String REC = "REC";
+    private static final String TRA = "TRA";
+    private static final String DAT = "DAT";
+
     // Response constants
     private static final String RESPONSE_OK = "OK";
     private static final String RESPONSE_SUCCESS = "SUCCESS";
@@ -29,6 +37,8 @@ public class ClientHandler {
     String ip;
     BufferedWriter output;
     BufferedReader input;
+
+    private static final String[] ALLOWED_PREFIXES = {"CMD", "REC", "TRA", "DAT"};
 
     public ClientHandler(Socket socket) throws Exception {
         this.socket = socket;
@@ -58,7 +68,7 @@ public class ClientHandler {
                 output.write(message);
                 output.newLine();
                 output.flush();
-                if (POSServer.config != null && POSServer.console.DEBUG) logger.debug("Sent to client {}: {}", ip, message);
+                if (POSServer.config != null && console.DEBUG) logger.debug("Sent to client {}: {}", ip, message);
                 return true;
             } catch (Exception e) {
                 logger.error("Error sending message to client {}: {}", ip, e.getMessage(), e);
@@ -71,7 +81,7 @@ public class ClientHandler {
      * Safely parse a message and return the command and arguments
      */
     private MessageParts parseMessage(String message) {
-        if (POSServer.config != null && POSServer.console.DEBUG) logger.debug("Parsing message from client {}: {}", ip, message);
+        if (POSServer.config != null && console.DEBUG) logger.debug("Parsing message from client {}: {}", ip, message);
         if (message == null || message.trim().isEmpty()) {
             return new MessageParts("", new String[0]);
         }
@@ -84,6 +94,18 @@ public class ClientHandler {
         }
 
         String command = parts[0].toUpperCase().trim();
+        boolean validPrefix = false;
+        for (String prefix : ALLOWED_PREFIXES) {
+            if (command.startsWith(prefix)) {
+                validPrefix = true;
+                break;
+            }
+        }
+        if (!validPrefix) {
+            sendToClient(buildResponse("ERROR", RESPONSE_FAIL, "Invalid message prefix. Must start with CMD, REC, TRA, or DAT."));
+            return new MessageParts("", new String[0]);
+        }
+
         String[] args = new String[parts.length - 1];
 
         // Copy arguments, handling potential null/empty values
@@ -97,8 +119,8 @@ public class ClientHandler {
     /**
      * Build a response message with proper delimiter
      */
-    private String buildResponse(String command, String... parts) {
-        StringBuilder response = new StringBuilder(command);
+    private String buildResponse(String type,String command, String... parts) {
+        StringBuilder response = new StringBuilder(type + DELIMITER + command);
         for (String part : parts) {
             response.append(DELIMITER).append(part != null ? part : "");
         }
@@ -112,7 +134,7 @@ public class ClientHandler {
         if (args.length != expectedCount) {
             String errorMsg = String.format("Invalid argument count for %s. Expected: %d, Got: %d",
                     command, expectedCount, args.length);
-            sendToClient(buildResponse(command, RESPONSE_FAIL, errorMsg));
+            sendToClient(buildResponse(CMD,command, RESPONSE_FAIL, errorMsg));
             return false;
         }
         return true;
@@ -129,27 +151,27 @@ public class ClientHandler {
                     String cmd = parsed.command;
                     String[] args = parsed.args;
 
-                    switch (cmd) {
-                        case CMD_TEST:
-                            handleTestCommand();
+                    switch(cmd){
+                        case "CMD":
+                            handleCMD(args);
                             break;
-
-                        case CMD_LOGIN:
-                            handleLoginCommand(args);
+                        case "REC":
+                            handleRec(args);
                             break;
-
-                        case CMD_LOGOUT:
-                            handleLogoutCommand();
+                        case "TRA":
+                            handleTra(args);
                             break;
-
+                        case "DAT":
+                            handleDat(args);
+                            break;
                         default:
-                            handleUnknownCommand(cmd);
+                            handleUnknownCommand(message);
                             break;
                     }
                 }
             } catch (Exception e) {
-                System.err.println("Error handling client " + ip + ": " + e.getMessage());
-                e.printStackTrace();
+                console.printError("Error handling client " + ip + ": " + e.getMessage());
+                logger.error("Error handling client {}: {}", ip, e.getMessage(), e);
             } finally {
                 closeConnection();
             }
@@ -158,29 +180,151 @@ public class ClientHandler {
         clientThread.start();
     }
 
+    private void handleDat(String[] args) {
+        if (args.length > 0) {
+            DatabaseHandler db = POSServer.databaseHandler;
+            StringBuilder sb = new StringBuilder();
+            switch (args[0].toUpperCase()) {
+                case "PROD_LIST":
+                    var products = db.getAllProducts();
+                    for (var product : products) {
+                        sb.append(product.get("id")).append("|")
+                          .append(product.get("name")).append("|")
+                          .append(product.get("description")).append("|")
+                          .append(product.get("price")).append("|")
+                          .append(product.get("stock")).append(";");
+                    }
+                    if (sb.length() > 0) sb.setLength(sb.length() - 1);
+                    sendToClient(buildResponse(DAT, "PROD_LIST", sb.toString()));
+                    break;
+                case "U_PERMS":
+                        if(args.length >1){
+                            var userlist = db.getAllUsers();
+                            var found = false;
+                            for (var user : userlist) {
+                                if (user.getUsername().equalsIgnoreCase(args[1])) {
+                                    for(var perm : user.getPermissions()) {
+                                        sb.append(perm).append("|");
+                                    }
+                                    found = true;
+                                    break;
+                                }
+                            }
+                            if (user != null) {
+                                if (!sb.isEmpty()) sb.setLength(sb.length() - 1);
+                                sendToClient(buildResponse(DAT, "U_PERMS", args[1], sb.toString()));
+                            } else {
+                                sendToClient(buildResponse(DAT, "U_PERMS", RESPONSE_FAIL, "User not found"));
+                            }
+                        } else {
+                            sendToClient(buildResponse(DAT, "U_PERMS", RESPONSE_FAIL, "Username required"));
+                        }
+
+                case "U_DATA":
+                    if (args.length > 1) {
+                        var usersList = db.getAllUsers();
+                        var found = false;
+                        for (var user : usersList) {
+                            if (user.getUsername().equalsIgnoreCase(args[1])) {
+                                sb.append(user.getUsername()).append("|")
+                                  .append(user.isAdmin()).append("|")
+                                  .append(user.isActive()).append("|")
+                                  .append(user.getLastLogin());
+                                found = true;
+                                break;
+                            }
+                        }
+                        if (found) {
+                            sendToClient(buildResponse(DAT, "U_DATA", args[1], sb.toString()));
+                        } else {
+                            sendToClient(buildResponse(DAT, "U_DATA", RESPONSE_FAIL, "User not found"));
+                        }
+                    } else {
+                        sendToClient(buildResponse(DAT, "U_DATA", RESPONSE_FAIL, "Username required"));
+                    }
+                    break;
+                case "TRANSACTION":
+                    if (args.length > 1) {
+                        var txn = db.getTransactionById(args[1]);
+                        if (txn.isEmpty()) {
+                            sendToClient(buildResponse(DAT, "TRANSACTION", RESPONSE_FAIL, "Transaction not found"));
+                        } else {
+                            for (var entry : txn.entrySet()) {
+                                sb.append(entry.getKey()).append("=").append(entry.getValue()).append("|");
+                            }
+                            if (sb.length() > 0) sb.setLength(sb.length() - 1);
+                            sendToClient(buildResponse(DAT, "TRANSACTION", args[1], sb.toString()));
+                        }
+                    } else {
+                        sendToClient(buildResponse(DAT, "TRANSACTION", RESPONSE_FAIL, "Transaction ID required"));
+                    }
+                    break;
+                default:
+                    sendToClient(buildResponse(DAT, args[0], RESPONSE_FAIL, "Unknown DAT command"));
+                    break;
+            }
+        } else {
+            sendToClient(buildResponse(DAT, "UNKNOWN", RESPONSE_FAIL, "Unknown DAT command"));
+        }
+    }
+
+    private void handleTra(String[] args) {
+    }
+
+    private void handleRec(String[] args) {
+    }
+
+    private void handleCMD(String[] args) {
+        switch (args[0]) {
+            case CMD_TEST:
+                handleTestCommand();
+                break;
+            case CMD_LOGIN:
+                handleLoginCommand(args);
+                break;
+            case CMD_LOGOUT:
+                handleLogoutCommand();
+                break;
+            case CMD_DISCONNECT:
+                handleDisconnectCommand();
+                break;
+            default:
+                handleUnknownCommand(args[0]);
+                break;
+        }
+    }
+
     private void handleTestCommand() {
-        sendToClient(buildResponse(CMD_TEST, RESPONSE_OK));
+        sendToClient(buildResponse(CMD, CMD_TEST, RESPONSE_OK));
     }
 
     private void handleLoginCommand(String[] args) {
-        if (!validateArgCount(CMD_LOGIN, args, 2)) {
+        if (!validateArgCount(CMD_LOGIN, args, 3)) {
             return;
         }
-
-        String username = args[0];
-        String password = args[1];
-
-        // Validate that username and password are not empty
+        String username = args[1];
+        String password = args[2];
         if (username.isEmpty() || password.isEmpty()) {
-            sendToClient(buildResponse(CMD_LOGIN, RESPONSE_FAIL, "Username and password cannot be empty"));
+            sendToClient(buildResponse(CMD, CMD_LOGIN, RESPONSE_FAIL, "Username and password cannot be empty"));
             return;
         }
-
-        sendToClient(buildResponse(CMD_LOGIN, RESPONSE_SUCCESS, username));
+        // Authenticate user using the database handler
+        UserModel authenticatedUser = POSServer.databaseHandler.authenticateUser(username, password);
+        if (authenticatedUser != null) {
+            this.user = authenticatedUser;
+            sendToClient(buildResponse(CMD, CMD_LOGIN, RESPONSE_SUCCESS, "Login successful"));
+        } else {
+            sendToClient(buildResponse(CMD, CMD_LOGIN, RESPONSE_FAIL, "Invalid username or password"));
+        }
     }
 
     private void handleLogoutCommand() {
-        sendToClient(buildResponse(CMD_LOGOUT, RESPONSE_SUCCESS));
+        sendToClient(buildResponse(CMD,CMD_LOGOUT, RESPONSE_SUCCESS));
+    }
+
+    private void handleDisconnectCommand() {
+        sendToClient(buildResponse(CMD, CMD_DISCONNECT, RESPONSE_SUCCESS, "Disconnected"));
+        closeConnection();
     }
 
     private void handleUnknownCommand(String command) {
@@ -216,3 +360,6 @@ public class ClientHandler {
         }
     }
 }
+
+
+

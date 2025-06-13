@@ -10,6 +10,7 @@ import org.slf4j.LoggerFactory;
 
 import java.nio.charset.StandardCharsets;
 import java.sql.*;
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.security.MessageDigest;
@@ -90,6 +91,17 @@ public class DatabaseHandler {
             INDEX idx_employee_id (employee_id),
             INDEX idx_timestamp (timestamp),
             INDEX idx_status (status)
+        )
+    """;
+    private static final String CREATE_PRODUCTS_TABLE = """
+        CREATE TABLE IF NOT EXISTS products (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            name VARCHAR(100) NOT NULL,
+            description TEXT,
+            price DECIMAL(10,2) NOT NULL,
+            stock INT DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         )
     """;
 
@@ -175,6 +187,7 @@ public class DatabaseHandler {
             stmt.execute(CREATE_PERMISSIONS_TABLE);
             stmt.execute(CREATE_USER_PERMISSIONS_TABLE);
             stmt.execute(CREATE_TRANSACTIONS_TABLE);
+            stmt.execute(CREATE_PRODUCTS_TABLE);
             if (POSServer.config != null && POSServer.console.DEBUG) logger.debug("Database tables created successfully");
         }
     }
@@ -261,7 +274,7 @@ public class DatabaseHandler {
         String sql = """
             SELECT id, username, password_hash, salt, is_admin, is_active, created_at, last_login
             FROM users 
-            WHERE username = ? AND is_active = TRUE
+            WHERE username = ? 
         """;
 
         try (Connection conn = getConnection();
@@ -273,23 +286,26 @@ public class DatabaseHandler {
                 if (rs.next()) {
                     String storedHash = rs.getString("password_hash");
                     String salt = rs.getString("salt");
+                    int id = rs.getInt("id");
 
                     // Verify password
                     if (verifyPassword(password, storedHash, salt)) {
                         // Update last login
-                        updateLastLogin(conn, rs.getInt("id"));
-
                         // Create user model
                         boolean isAdmin = rs.getBoolean("is_admin");
-                        Set<PermissionModel> permissions = getUserPermissions(rs.getInt("id"));
+                        boolean isActive = rs.getBoolean("is_active");
+                        LocalDateTime last_login = rs.getTimestamp("last_login") != null ?
+                                rs.getTimestamp("last_login").toLocalDateTime() : null;
+                        Set<PermissionModel> permissions = getUserPermissions(id);
 
                         UserModel user = new UserModel(username, "", isAdmin, permissions);
-                        user.setActive(rs.getBoolean("is_active"));
-                        user.setLastLogin(rs.getTimestamp("last_login") != null ?
-                                rs.getTimestamp("last_login").toLocalDateTime() : null);
+                        user.setActive(isActive);
+                        user.setLastLogin(last_login);
 
                         return user;
                     }
+                }else{
+                    logger.warn("User not found: {}", username);
                 }
             } catch (SQLException e) {
                 logger.error("Error authenticating user: {}", e.getMessage(), e);
@@ -369,17 +385,6 @@ public class DatabaseHandler {
         return dependencies;
     }
 
-    /**
-     * Update user's last login timestamp
-     */
-    private void updateLastLogin(Connection conn, int userId) throws SQLException {
-        String sql = "UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?";
-
-        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
-            stmt.setInt(1, userId);
-            stmt.executeUpdate();
-        }
-    }
 
     /**
      * Create a new user
@@ -529,12 +534,17 @@ public class DatabaseHandler {
              ResultSet rs = stmt.executeQuery(sql)) {
 
             while (rs.next()) {
+                String username = rs.getString("username");
+                boolean isAdmin = rs.getBoolean("is_admin");
+                boolean isActive = rs.getBoolean("is_active");
+                LocalDateTime timestamp = rs.getTimestamp("created_at") != null ?
+                        rs.getTimestamp("created_at").toLocalDateTime() : null;
+
                 Set<PermissionModel> permissions = getUserPermissions(rs.getInt("id"));
 
-                UserModel user = new UserModel(rs.getString("username"), "", rs.getBoolean("is_admin"), permissions);
-                user.setActive(rs.getBoolean("is_active"));
-                user.setLastLogin(rs.getTimestamp("last_login") != null ?
-                        rs.getTimestamp("last_login").toLocalDateTime() : null);
+                UserModel user = new UserModel(username, "", isAdmin, permissions);
+                user.setActive(isActive);
+                user.setLastLogin(timestamp);
 
                 users.add(user);
             }
@@ -544,6 +554,56 @@ public class DatabaseHandler {
         }
 
         return users;
+    }
+
+    /**
+     * Get all products
+     */
+    public List<Map<String, Object>> getAllProducts() {
+        List<Map<String, Object>> products = new ArrayList<>();
+        String sql = "SELECT id, name, description, price, stock FROM products";
+        try (Connection conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD);
+             PreparedStatement ps = conn.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                Map<String, Object> product = new HashMap<>();
+                product.put("id", rs.getInt("id"));
+                product.put("name", rs.getString("name"));
+                product.put("description", rs.getString("description"));
+                product.put("price", rs.getBigDecimal("price"));
+                product.put("stock", rs.getInt("stock"));
+                products.add(product);
+            }
+        } catch (SQLException e) {
+            logger.error("Error retrieving products: {}", e.getMessage(), e);
+        }
+        return products;
+    }
+
+    /**
+     * Get a transaction by its transaction_id
+     */
+    public Map<String, Object> getTransactionById(String transactionId) {
+        Map<String, Object> transaction = new HashMap<>();
+        String sql = "SELECT * FROM transactions WHERE transaction_id = ?";
+        try (Connection conn = getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, transactionId);
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    ResultSetMetaData meta = rs.getMetaData();
+                    int columnCount = meta.getColumnCount();
+                    for (int i = 1; i <= columnCount; i++) {
+                        String columnName = meta.getColumnName(i);
+                        Object value = rs.getObject(i);
+                        transaction.put(columnName, value);
+                    }
+                }
+            }
+        } catch (SQLException e) {
+            logger.error("Error retrieving transaction by id {}: {}", transactionId, e.getMessage(), e);
+        }
+        return transaction;
     }
 
     /**

@@ -83,7 +83,7 @@ public class ConsoleHandler {
 
     public static void printInfo(String msg) {
         logger.info(msg);
-        printMessage("[INFO] ", ConsoleColors.BLUE_BOLD, msg);
+        printMessage("[INFO] ", ConsoleColors.GREEN_BOLD, msg);
     }
 
     public static void printWarning(String msg) {
