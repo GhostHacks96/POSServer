@@ -427,17 +427,23 @@
                 const settings = await response.json();
                 this.originalSettings = { ...settings };
 
-                // Populate form fields
+                console.log('Loaded settings:', settings); // Debug log
+
+                // Populate form fields with proper boolean handling
                 document.getElementById('port').value = settings.port || 666;
-                document.getElementById('autoStart').checked = settings['auto-start'] || false;
-                document.getElementById('debug').checked = settings.debug || false;
+
+                // Handle boolean values correctly - convert to actual boolean
+                document.getElementById('autoStart').checked = this.toBool(settings['auto-start']);
+                document.getElementById('debug').checked = this.toBool(settings.debug);
+                document.getElementById('dbGetRemote').checked = this.toBool(settings.db_getremote);
+
+                // Handle string values
                 document.getElementById('dbFile').value = settings.db_file || 'pos.db';
-                document.getElementById('dbGetRemote').checked = settings.db_getremote || false;
                 document.getElementById('dbHost').value = settings['db-r-host'] || '';
 
                 // Show/hide remote host setting
                 const remoteHostSetting = document.getElementById('remoteHostSetting');
-                remoteHostSetting.style.display = settings.db_getremote ? 'flex' : 'none';
+                remoteHostSetting.style.display = this.toBool(settings.db_getremote) ? 'flex' : 'none';
 
                 // Update system info
                 if (settings.lastModified) {
@@ -448,10 +454,31 @@
                 this.showStatus('Settings loaded successfully', 'success');
                 this.clearChanged();
 
+                // Debug: Log the actual checkbox states
+                console.log('Checkbox states after load:', {
+                    autoStart: document.getElementById('autoStart').checked,
+                    debug: document.getElementById('debug').checked,
+                    dbGetRemote: document.getElementById('dbGetRemote').checked
+                });
+
             } catch (error) {
                 console.error('Failed to load settings:', error);
                 this.showStatus('Failed to load settings: ' + error.message, 'error');
             }
+        }
+
+        // Helper function to properly convert values to boolean
+        toBool(value) {
+            if (typeof value === 'boolean') {
+                return value;
+            }
+            if (typeof value === 'string') {
+                return value.toLowerCase() === 'true';
+            }
+            if (typeof value === 'number') {
+                return value !== 0;
+            }
+            return !!value;
         }
 
         async saveSettings() {
@@ -467,6 +494,8 @@
                 settings.db_getremote = document.getElementById('dbGetRemote').checked;
                 settings['db-r-host'] = formData.get('db-r-host') || '';
 
+                console.log('Saving settings:', settings); // Debug log
+
                 this.showStatus('Saving settings...', 'info');
 
                 const response = await fetch('/api/settings', {
@@ -478,7 +507,8 @@
                 });
 
                 if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
                 }
 
                 const result = await response.json();

@@ -3,6 +3,7 @@ package me.ghosthacks96.pos.server.utils.controllers;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import me.ghosthacks96.pos.server.POSServer;
 import me.ghosthacks96.pos.server.utils.console.ConsoleHandler;
+import me.ghosthacks96.pos.server.utils.web.SettingsServlet;
 import me.ghosthacks96.pos.server.utils.web.TemplateLoader;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.server.ServerConnector;
@@ -148,6 +149,9 @@ public class WebInterfaceHandler {
 
         // API endpoints
         context.addServlet(new ServletHolder(new ApiServlet()), "/api/*");
+
+        // Settings servlet
+        context.addServlet(new ServletHolder(new SettingsServlet()), "/settings");
 
         // Static resources (CSS, JS, images)
         context.addServlet(new ServletHolder(new StaticResourceServlet()), "/static/*");
