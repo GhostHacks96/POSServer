@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{title}} - POS System</title>
+    <link rel="stylesheet" href="/static/css/common.css">
+    <link rel="stylesheet" href="/static/css/dashboard.css">
+    <link rel="icon" href="/static/images/favicon.ico" type="image/x-icon">
+</head>
+<body>
+<nav class="navbar">
+    <div class="nav-container">
+        <div class="nav-brand">
+            <h1>POS System</h1>
+        </div>
+        <ul class="nav-menu">
+            <li><a href="/dashboard" class="nav-link">Dashboard</a></li>
+            <li><a href="/products" class="nav-link">Products</a></li>
+            <li><a href="/transactions" class="nav-link">Transactions</a></li>
+            <li><a href="/reports" class="nav-link">Reports</a></li>
+            <li><a href="/settings" class="nav-link">Settings</a></li>
+        </ul>
+    </div>
+</nav>
+
+<main class="main-content">
+    <div class="header-section">
+        <h2>{{pageTitle}}</h2>
+        <div class="header-actions">
+            <button class="btn btn-primary" onclick="refreshData()">
+                <i class="icon-refresh"></i> Refresh
+            </button>
+        </div>
+    </div>
+
+    <div class="dashboard-grid">
+        <div class="card status-card">
+            <div class="card-header">
+                <h3>System Status</h3>
+                <span class="status-indicator {{statusClass}}"></span>
+            </div>
+            <div class="card-body">
+                <div class="status-item">
+                    <span class="status-label">Server:</span>
+                    <span class="status-value {{serverStatus}}">{{serverStatusText}}</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">Database:</span>
+                    <span class="status-value {{dbStatus}}">{{dbStatusText}}</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">Last Updated:</span>
+                    <span class="status-value" id="lastUpdated">{{lastUpdated}}</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="card stats-card">
+            <div class="card-header">
+                <h3>Today's Overview</h3>
+            </div>
+            <div class="card-body">
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <div class="stat-value" id="todaySales">{{todaySales}}</div>
+                        <div class="stat-label">Sales</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" id="todayTransactions">{{todayTransactions}}</div>
+                        <div class="stat-label">Transactions</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" id="connectedClients">{{connectedClients}}</div>
+                        <div class="stat-label">Connected Clients</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" id="totalProducts">{{totalProducts}}</div>
+                        <div class="stat-label">Products</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card actions-card">
+            <div class="card-header">
+                <h3>Quick Actions</h3>
+            </div>
+            <div class="card-body">
+                <div class="action-buttons">
+                    <button class="btn btn-secondary" onclick="window.location.href='/products'">
+                        <i class="icon-package"></i> Manage Products
+                    </button>
+                    <button class="btn btn-secondary" onclick="window.location.href='/transactions'">
+                        <i class="icon-list"></i> View Transactions
+                    </button>
+                    <button class="btn btn-secondary" onclick="showReports()">
+                        <i class="icon-bar-chart"></i> Generate Reports
+                    </button>
+                    <button class="btn btn-secondary" onclick="openPOSTerminal()">
+                        <i class="icon-shopping-cart"></i> Open POS Terminal
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="card recent-activity-card">
+            <div class="card-header">
+                <h3>Recent Activity</h3>
+            </div>
+            <div class="card-body">
+                <div class="activity-list" id="recentActivity">
+                    {{recentActivity}}
+                </div>
+            </div>
+        </div>
+    </div>
+</main>
+
+<footer class="footer">
+    <div class="footer-content">
+        <p>&copy; 2025 POS System. Version {{version}}</p>
+        <p>Server Time: <span id="serverTime">{{serverTime}}</span></p>
+    </div>
+</footer>
+
+<script src="/static/js/api.js"></script>
+<script src="/static/js/dashboard.js"></script>
+</body>
+</html>

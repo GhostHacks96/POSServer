@@ -11,7 +11,7 @@ import java.util.Map;
 
 public class Config {
 
-    Yaml config;
+    static Yaml config;
     static Map<String,Object> configMap;
     ConsoleHandler console;
 
@@ -58,5 +58,35 @@ public class Config {
         } catch (Exception e) {
             console.printError("Failed to load configuration: " + e.getMessage());
         }
+    }
+
+    public static void saveConfig() {
+        if (configMap != null) {
+            try (BufferedWriter output = new BufferedWriter(new FileWriter(new File("config.yml")))) {
+                config.dump(configMap, output);
+                ConsoleHandler.printInfo("Configuration saved to config.yml");
+            } catch (Exception e) {
+                ConsoleHandler.printError("Failed to save configuration: " + e.getMessage());
+            }
+        }
+    }
+
+    public void setConfigOption(String key, Object value) {
+        if (this.configMap == null) {
+            this.loadConfig();
+        }
+        this.configMap.put(key, value);
+        try (BufferedWriter output = new BufferedWriter(new FileWriter(new File("config.yml")))) {
+            this.config.dump(this.configMap, output);
+        } catch (Exception e) {
+            console.printError("Failed to save configuration: " + e.getMessage());
+        }
+    }
+
+    public Object getConfigOption(String key) {
+        if (this.configMap == null) {
+            this.loadConfig();
+        }
+        return this.configMap.get(key);
     }
 }

@@ -12,7 +12,9 @@ import org.slf4j.LoggerFactory;
 
 import javax.jmdns.JmDNS;
 import javax.jmdns.ServiceInfo;
+import java.io.BufferedWriter;
 import java.io.File;
+import java.io.FileWriter;
 import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -153,6 +155,7 @@ public class POSServer {
                console.printInfo("No clients connected.");
            }
 
+           config.saveConfig();
            console.printInfo("Unregistering local url...");
            jmdns.unregisterAllServices();
            jmdns.close();
@@ -181,7 +184,6 @@ public class POSServer {
                     console.printInfo("New client connected: " + clientHandler.getIp());
 
                 }
-                shutdownSystem();
             } catch (Exception e) {
                 console.printError("Error starting server: " + e.getMessage());
 
@@ -207,4 +209,5 @@ public class POSServer {
 
         console.printInfo("Server shutdown complete.");
     }
+
 }
