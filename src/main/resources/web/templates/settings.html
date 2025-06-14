@@ -1,3 +1,648 @@
-<html>
-<h1>Settings</h1>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Settings - POS System</title>
+    <link rel="stylesheet" href="/static/css/common.css">
+    <style>
+        .settings-container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .settings-section {
+            margin-bottom: 2rem;
+        }
+
+        .settings-grid {
+            display: grid;
+            gap: 1rem;
+        }
+
+        .setting-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem;
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            background: white;
+        }
+
+        .setting-info {
+            flex: 1;
+        }
+
+        .setting-title {
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 0.25rem;
+        }
+
+        .setting-description {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+        }
+
+        .setting-control {
+            min-width: 200px;
+            margin-left: 1rem;
+        }
+
+        .form-control {
+            width: 100%;
+        }
+
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 60px;
+            height: 34px;
+        }
+
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 34px;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 26px;
+            width: 26px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+
+        input:checked + .slider {
+            background-color: var(--success-color);
+        }
+
+        input:checked + .slider:before {
+            transform: translateX(26px);
+        }
+
+        .save-actions {
+            position: sticky;
+            bottom: 0;
+            background: white;
+            padding: 1rem;
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            gap: 1rem;
+            justify-content: flex-end;
+        }
+
+        .status-message {
+            padding: 0.75rem 1rem;
+            border-radius: var(--border-radius);
+            margin-bottom: 1rem;
+            display: none;
+        }
+
+        .status-message.success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .status-message.error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .database-section {
+            border-left: 4px solid var(--warning-color);
+            padding-left: 1rem;
+        }
+
+        .danger-zone {
+            border-left: 4px solid var(--danger-color);
+            padding-left: 1rem;
+            margin-top: 2rem;
+        }
+
+        .connection-test {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+        }
+    </style>
+</head>
+<body>
+<nav class="navbar">
+    <div class="nav-container">
+        <div class="nav-brand">
+            <h1>POS System</h1>
+        </div>
+        <ul class="nav-menu">
+            <li><a href="/dashboard" class="nav-link">Dashboard</a></li>
+            <li><a href="/products" class="nav-link">Products</a></li>
+            <li><a href="/transactions" class="nav-link">Transactions</a></li>
+            <li><a href="/reports" class="nav-link">Reports</a></li>
+            <li><a href="/settings" class="nav-link active">Settings</a></li>
+        </ul>
+    </div>
+</nav>
+
+<main class="main-content">
+    <div class="settings-container">
+        <div class="header-section">
+            <h2>System Settings</h2>
+            <div class="header-actions">
+                <button class="btn btn-secondary" onclick="resetToDefaults()">
+                    Reset to Defaults
+                </button>
+                <button class="btn btn-primary" onclick="loadSettings()">
+                    Refresh
+                </button>
+            </div>
+        </div>
+
+        <div id="statusMessage" class="status-message"></div>
+
+        <form id="settingsForm">
+            <!-- Server Configuration -->
+            <div class="card settings-section">
+                <div class="card-header">
+                    <h3>Server Configuration</h3>
+                </div>
+                <div class="card-body">
+                    <div class="settings-grid">
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <div class="setting-title">Server Port</div>
+                                <div class="setting-description">Port number for the server to listen on</div>
+                            </div>
+                            <div class="setting-control">
+                                <input type="number" id="port" name="port" class="form-control"
+                                       min="1" max="65535" value="666">
+                            </div>
+                        </div>
+
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <div class="setting-title">Auto-start Server</div>
+                                <div class="setting-description">Automatically start client processing on server startup</div>
+                            </div>
+                            <div class="setting-control">
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="autoStart" name="auto-start" checked>
+                                    <span class="slider"></span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <div class="setting-title">Debug Mode</div>
+                                <div class="setting-description">Enable detailed logging and debug information</div>
+                            </div>
+                            <div class="setting-control">
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="debug" name="debug" checked>
+                                    <span class="slider"></span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Database Configuration -->
+            <div class="card settings-section database-section">
+                <div class="card-header">
+                    <h3>Database Configuration</h3>
+                </div>
+                <div class="card-body">
+                    <div class="settings-grid">
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <div class="setting-title">Database File</div>
+                                <div class="setting-description">Local database file name</div>
+                            </div>
+                            <div class="setting-control">
+                                <input type="text" id="dbFile" name="db_file" class="form-control"
+                                       value="pos.db">
+                            </div>
+                        </div>
+
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <div class="setting-title">Remote Database Access</div>
+                                <div class="setting-description">Enable remote database synchronization</div>
+                            </div>
+                            <div class="setting-control">
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="dbGetRemote" name="db_getremote">
+                                    <span class="slider"></span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="setting-item" id="remoteHostSetting">
+                            <div class="setting-info">
+                                <div class="setting-title">Remote Database Host</div>
+                                <div class="setting-description">URL or IP address of the remote database server</div>
+                                <div class="connection-test">
+                                    <button type="button" class="btn btn-secondary" onclick="testConnection()">
+                                        Test Connection
+                                    </button>
+                                    <span id="connectionStatus"></span>
+                                </div>
+                            </div>
+                            <div class="setting-control">
+                                <input type="text" id="dbHost" name="db-r-host" class="form-control"
+                                       placeholder="https://example.com/database">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- System Information -->
+            <div class="card settings-section">
+                <div class="card-header">
+                    <h3>System Information</h3>
+                </div>
+                <div class="card-body">
+                    <div class="settings-grid">
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <div class="setting-title">System Version</div>
+                                <div class="setting-description">Current version of the POS system</div>
+                            </div>
+                            <div class="setting-control">
+                                <span class="status-value" id="systemVersion">1.0.0</span>
+                            </div>
+                        </div>
+
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <div class="setting-title">Configuration File</div>
+                                <div class="setting-description">Location of the configuration file</div>
+                            </div>
+                            <div class="setting-control">
+                                <span class="status-value">config.yml</span>
+                            </div>
+                        </div>
+
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <div class="setting-title">Last Modified</div>
+                                <div class="setting-description">When the configuration was last changed</div>
+                            </div>
+                            <div class="setting-control">
+                                <span class="status-value" id="lastModified">Loading...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Danger Zone -->
+            <div class="card settings-section danger-zone">
+                <div class="card-header">
+                    <h3>Danger Zone</h3>
+                </div>
+                <div class="card-body">
+                    <div class="settings-grid">
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <div class="setting-title">Reset All Settings</div>
+                                <div class="setting-description">Reset all configuration to default values</div>
+                            </div>
+                            <div class="setting-control">
+                                <button type="button" class="btn btn-danger" onclick="confirmReset()">
+                                    Reset to Defaults
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <div class="setting-title">Restart Server</div>
+                                <div class="setting-description">Restart the server to apply changes</div>
+                            </div>
+                            <div class="setting-control">
+                                <button type="button" class="btn btn-warning" onclick="restartServer()">
+                                    Restart Server
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </form>
+
+        <div class="save-actions">
+            <button type="button" class="btn btn-secondary" onclick="loadSettings()">
+                Cancel Changes
+            </button>
+            <button type="button" class="btn btn-primary" onclick="saveSettings()">
+                Save Settings
+            </button>
+        </div>
+    </div>
+</main>
+
+<footer class="footer">
+    <div class="footer-content">
+        <p>&copy; 2025 POS System</p>
+        <p>Settings will take effect after server restart</p>
+    </div>
+</footer>
+
+<script>
+    class SettingsManager {
+        constructor() {
+            this.originalSettings = {};
+            this.init();
+        }
+
+        init() {
+            this.setupEventListeners();
+            this.loadSettings();
+        }
+
+        setupEventListeners() {
+            // Toggle remote database host field visibility
+            document.getElementById('dbGetRemote').addEventListener('change', (e) => {
+                const remoteHostSetting = document.getElementById('remoteHostSetting');
+                remoteHostSetting.style.display = e.target.checked ? 'flex' : 'none';
+            });
+
+            // Port validation
+            document.getElementById('port').addEventListener('input', (e) => {
+                const port = parseInt(e.target.value);
+                if (port < 1 || port > 65535) {
+                    e.target.setCustomValidity('Port must be between 1 and 65535');
+                } else {
+                    e.target.setCustomValidity('');
+                }
+            });
+
+            // Detect changes
+            document.getElementById('settingsForm').addEventListener('change', () => {
+                this.markAsChanged();
+            });
+
+            // Prevent accidental navigation
+            window.addEventListener('beforeunload', (e) => {
+                if (this.hasUnsavedChanges()) {
+                    e.preventDefault();
+                    e.returnValue = '';
+                }
+            });
+        }
+
+        async loadSettings() {
+            try {
+                this.showStatus('Loading settings...', 'info');
+
+                const response = await fetch('/api/settings');
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const settings = await response.json();
+                this.originalSettings = { ...settings };
+
+                // Populate form fields
+                document.getElementById('port').value = settings.port || 666;
+                document.getElementById('autoStart').checked = settings['auto-start'] || false;
+                document.getElementById('debug').checked = settings.debug || false;
+                document.getElementById('dbFile').value = settings.db_file || 'pos.db';
+                document.getElementById('dbGetRemote').checked = settings.db_getremote || false;
+                document.getElementById('dbHost').value = settings['db-r-host'] || '';
+
+                // Show/hide remote host setting
+                const remoteHostSetting = document.getElementById('remoteHostSetting');
+                remoteHostSetting.style.display = settings.db_getremote ? 'flex' : 'none';
+
+                // Update system info
+                if (settings.lastModified) {
+                    document.getElementById('lastModified').textContent =
+                        new Date(settings.lastModified).toLocaleString();
+                }
+
+                this.showStatus('Settings loaded successfully', 'success');
+                this.clearChanged();
+
+            } catch (error) {
+                console.error('Failed to load settings:', error);
+                this.showStatus('Failed to load settings: ' + error.message, 'error');
+            }
+        }
+
+        async saveSettings() {
+            try {
+                const formData = new FormData(document.getElementById('settingsForm'));
+                const settings = {};
+
+                // Convert form data to settings object
+                settings.port = parseInt(formData.get('port')) || 666;
+                settings['auto-start'] = document.getElementById('autoStart').checked;
+                settings.debug = document.getElementById('debug').checked;
+                settings.db_file = formData.get('db_file') || 'pos.db';
+                settings.db_getremote = document.getElementById('dbGetRemote').checked;
+                settings['db-r-host'] = formData.get('db-r-host') || '';
+
+                this.showStatus('Saving settings...', 'info');
+
+                const response = await fetch('/api/settings', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(settings)
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const result = await response.json();
+                this.originalSettings = { ...settings };
+
+                this.showStatus('Settings saved successfully! Restart server to apply changes.', 'success');
+                this.clearChanged();
+
+            } catch (error) {
+                console.error('Failed to save settings:', error);
+                this.showStatus('Failed to save settings: ' + error.message, 'error');
+            }
+        }
+
+        async testConnection() {
+            const hostUrl = document.getElementById('dbHost').value;
+            if (!hostUrl) {
+                this.showConnectionStatus('Please enter a host URL', 'error');
+                return;
+            }
+
+            try {
+                document.getElementById('connectionStatus').innerHTML =
+                    '<div class="loading"></div> Testing...';
+
+                const response = await fetch('/api/test-connection', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ host: hostUrl })
+                });
+
+                const result = await response.json();
+
+                if (response.ok && result.success) {
+                    this.showConnectionStatus('Connection successful', 'success');
+                } else {
+                    this.showConnectionStatus('Connection failed: ' + (result.message || 'Unknown error'), 'error');
+                }
+
+            } catch (error) {
+                this.showConnectionStatus('Connection failed: ' + error.message, 'error');
+            }
+        }
+
+        showConnectionStatus(message, type) {
+            const statusElement = document.getElementById('connectionStatus');
+            statusElement.className = `status-value ${type}`;
+            statusElement.textContent = message;
+
+            setTimeout(() => {
+                statusElement.textContent = '';
+                statusElement.className = 'status-value';
+            }, 5000);
+        }
+
+        showStatus(message, type) {
+            const statusElement = document.getElementById('statusMessage');
+            statusElement.textContent = message;
+            statusElement.className = `status-message ${type}`;
+            statusElement.style.display = 'block';
+
+            if (type === 'success' || type === 'info') {
+                setTimeout(() => {
+                    statusElement.style.display = 'none';
+                }, 5000);
+            }
+        }
+
+        hasUnsavedChanges() {
+            const currentSettings = this.getCurrentFormSettings();
+            return JSON.stringify(currentSettings) !== JSON.stringify(this.originalSettings);
+        }
+
+        getCurrentFormSettings() {
+            const formData = new FormData(document.getElementById('settingsForm'));
+            return {
+                port: parseInt(formData.get('port')) || 666,
+                'auto-start': document.getElementById('autoStart').checked,
+                debug: document.getElementById('debug').checked,
+                db_file: formData.get('db_file') || 'pos.db',
+                db_getremote: document.getElementById('dbGetRemote').checked,
+                'db-r-host': formData.get('db-r-host') || ''
+            };
+        }
+
+        markAsChanged() {
+            document.querySelector('.save-actions').style.background = '#fff3cd';
+        }
+
+        clearChanged() {
+            document.querySelector('.save-actions').style.background = 'white';
+        }
+    }
+
+    // Global functions
+    function loadSettings() {
+        if (window.settingsManager) {
+            window.settingsManager.loadSettings();
+        }
+    }
+
+    function saveSettings() {
+        if (window.settingsManager) {
+            window.settingsManager.saveSettings();
+        }
+    }
+
+    function testConnection() {
+        if (window.settingsManager) {
+            window.settingsManager.testConnection();
+        }
+    }
+
+    function resetToDefaults() {
+        if (confirm('Are you sure you want to reset all settings to default values? This cannot be undone.')) {
+            // Reset form to default values
+            document.getElementById('port').value = 666;
+            document.getElementById('autoStart').checked = true;
+            document.getElementById('debug').checked = true;
+            document.getElementById('dbFile').value = 'pos.db';
+            document.getElementById('dbGetRemote').checked = false;
+            document.getElementById('dbHost').value = '';
+
+            document.getElementById('remoteHostSetting').style.display = 'none';
+
+            if (window.settingsManager) {
+                window.settingsManager.markAsChanged();
+                window.settingsManager.showStatus('Settings reset to defaults. Click Save to apply.', 'info');
+            }
+        }
+    }
+
+    function confirmReset() {
+        if (confirm('This will reset ALL settings to their default values and restart the server. Are you sure?')) {
+            resetToDefaults();
+            setTimeout(() => {
+                saveSettings();
+            }, 500);
+        }
+    }
+
+    async function restartServer() {
+        if (confirm('This will restart the server. All connected clients will be disconnected. Continue?')) {
+            try {
+                await fetch('/api/restart', { method: 'POST' });
+                alert('Server restart initiated. The page will reload in a moment.');
+
+                setTimeout(() => {
+                    window.location.reload();
+                }, 3000);
+
+            } catch (error) {
+                alert('Failed to restart server: ' + error.message);
+            }
+        }
+    }
+
+    // Initialize when DOM is loaded
+    document.addEventListener('DOMContentLoaded', () => {
+        window.settingsManager = new SettingsManager();
+        console.log('Settings manager initialized');
+    });
+</script>
+</body>
 </html>
